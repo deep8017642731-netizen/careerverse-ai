@@ -1,0 +1,49 @@
+/* Import Google Fonts */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Source+Serif+4:wght@400;600;700&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --color-navy: #1e293b;
+  --color-navy-dark: #0f172a;
+  --color-charcoal: #334155;
+  --color-teal: #0d9488;
+  --color-teal-light: #14b8a6;
+  --color-teal-dark: #0f766e;
+  --color-amber: #d97706;
+  --color-amber-light: #f59e0b;
+  --color-cream: #fefce8;
+  --color-offwhite: #f8fafc;
+  --color-surface: #ffffff;
+  --color-border: #e2e8f0;
+  --color-text-primary: #1e293b;
+  --color-text-secondary: #64748b;
+  --color-text-muted: #94a3b8;
+  --color-success: #059669;
+  --color-danger: #dc2626;
+  --color-warning: #d97706;
+
+  --font-sans: 'Inter', 'Manrope', system-ui, sans-serif;
+  --font-serif: 'Source Serif 4', Georgia, serif;
+}
+
+@layer base {
+  * {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+  }
+
+  html {
+    scroll-behavior: smooth;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  body {
+    font-family: var(--font-sans);
+    color: var(--color-text-primary);
+    background-color: var(--color-offwhite);
+    line-height: 1.6;
+  }
+}
+
