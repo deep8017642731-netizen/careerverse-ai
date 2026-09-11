@@ -1,4 +1,4 @@
-import type { AssessmentAnswers, CandidateProfile, CareerWorld } from "../../src/lib/types";
+import type { AssessmentAnswers, CandidateProfile, CareerWorld } from "../../src/lib/types.js";
 
 export const SYSTEM_PROMPT = `You are CareerVerse AI, an elite career counselor and labor economist specializing in the Indian professional and academic market.
 Your mission is to provide realistic, data-informed, and honest career guidance for Indian students and professionals.

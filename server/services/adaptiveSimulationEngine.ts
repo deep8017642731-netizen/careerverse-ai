@@ -6,8 +6,7 @@ import type {
   CareerWorld,
   SimulationDecision,
   SimulationDifficulty,
-} from '../../src/lib/types';
-
+} from '../../src/lib/types.js';
 interface ScenarioTemplate {
   id: string;
   title: string;

@@ -1,6 +1,6 @@
-import type { AssessmentAnswers, CandidateProfile, CareerWorld, CareerRoadmap } from '../../src/lib/types';
-import { SYSTEM_PROMPT, buildRoadmapPrompt } from '../prompts/systemPrompt';
-import { callOpenRouter } from './openRouterClient';
+import type { AssessmentAnswers, CandidateProfile, CareerWorld, CareerRoadmap } from '../../src/lib/types.js';
+import { SYSTEM_PROMPT, buildRoadmapPrompt } from '../prompts/systemPrompt.js';
+import { callOpenRouter } from './openRouterClient.js';
 
 function getRealisticFallbackRoadmap(world: CareerWorld, answers: AssessmentAnswers, profile?: CandidateProfile): CareerRoadmap {
   const currentPos = answers.fieldOfStudy 

@@ -1,8 +1,8 @@
-import type { AssessmentAnswers, CandidateProfile, CareerWorld, CareerArchetype, MarketResearch } from '../../src/lib/types';
-import { SYSTEM_PROMPT, buildProfileUnderstandingPrompt } from '../prompts/systemPrompt';
-import { callOpenRouter } from './openRouterClient';
-import { searchCurrentMarket } from './marketSearch';
-import { calculateNetWorthProjection, estimateMonthlyExpenses } from '../../src/lib/financialModel';
+import type { AssessmentAnswers, CandidateProfile, CareerWorld, CareerArchetype, MarketResearch } from '../../src/lib/types.js';
+import { SYSTEM_PROMPT, buildProfileUnderstandingPrompt } from '../prompts/systemPrompt.js';
+import { callOpenRouter } from './openRouterClient.js';
+import { searchCurrentMarket } from './marketSearch.js';
+import { calculateNetWorthProjection, estimateMonthlyExpenses } from '../../src/lib/financialModel.js';
 
 // ============================================================
 // RESEARCH STEP: Deep career research based on candidate profile

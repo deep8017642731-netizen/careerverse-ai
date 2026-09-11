@@ -1,8 +1,7 @@
 import { Router, Request, Response } from 'express';
-import { generateCandidateProfile, runSimulation, researchCareerPaths } from '../services/simulationEngine';
-import { generateRoadmap } from '../services/roadmapEngine';
-import { createAdaptiveScenario, evaluateAdaptiveDecision } from '../services/adaptiveSimulationEngine';
-
+import { generateCandidateProfile, runSimulation, researchCareerPaths } from '../services/simulationEngine.js';
+import { generateRoadmap } from '../services/roadmapEngine.js';
+import { createAdaptiveScenario, evaluateAdaptiveDecision } from '../services/adaptiveSimulationEngine.js';
 const router = Router();
 
 // Stage 1: Understand Candidate DNA
