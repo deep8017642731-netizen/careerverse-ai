@@ -10,6 +10,50 @@ import { calculateNetWorthProjection, estimateMonthlyExpenses } from '../../src/
 
 export interface CareerResearchResult extends MarketResearch {}
 
+interface StageCalibration {
+  label: string;
+  titlePrefix: string;
+  salaryFactor: number;
+  comfortableTimeline: string;
+  peakTimeline: string;
+}
+
+function getStageCalibration(stage: AssessmentAnswers['currentStage']): StageCalibration {
+  switch (stage) {
+    case 'school':
+      return { label: 'school-stage exploration', titlePrefix: 'Explore: ', salaryFactor: 0.62, comfortableTimeline: '4–6 years after choosing a specialization', peakTimeline: '10–14 years' };
+    case 'undergrad':
+      return { label: 'undergraduate launch planning', titlePrefix: 'Launch track: ', salaryFactor: 0.78, comfortableTimeline: '2–4 years after graduation', peakTimeline: '8–12 years' };
+    case 'graduate':
+      return { label: 'early-career entry', titlePrefix: 'Early-career route: ', salaryFactor: 0.92, comfortableTimeline: '1–3 years', peakTimeline: '7–10 years' };
+    case 'career-switcher':
+      return { label: 'career transition planning', titlePrefix: 'Transition route: ', salaryFactor: 0.8, comfortableTimeline: '2–5 years after the transition', peakTimeline: '8–12 years' };
+    case 'working':
+    default:
+      return { label: 'working-professional progression', titlePrefix: 'Growth route: ', salaryFactor: 1.08, comfortableTimeline: '1–2 years', peakTimeline: '6–9 years' };
+  }
+}
+
+function stageAdjustedSalaryTrajectory(
+  trajectory: CareerWorld['salaryTrajectory'],
+  factor: number
+): CareerWorld['salaryTrajectory'] {
+  return trajectory.map(point => ({
+    ...point,
+    ctcLPA: Math.round(point.ctcLPA * factor * 10) / 10,
+    ctcLow: Math.round(point.ctcLow * factor * 10) / 10,
+    ctcHigh: Math.round(point.ctcHigh * factor * 10) / 10,
+  }));
+}
+
+function polishCareerTitle(title: string): string {
+  return title
+    .replace(/\bengineering engineer\b/gi, 'engineering specialist')
+    .replace(/\b(engineer|analyst|lead|specialist)\s+\1\b/gi, '$1')
+    .replace(/\s{2,}/g, ' ')
+    .trim();
+}
+
 function normalizeResearch(raw: unknown, fallback: CareerResearchResult, sources: { title: string; url: string }[] = []): CareerResearchResult {
   const value = raw && typeof raw === 'object' ? raw as Record<string, unknown> : {};
   const stringArray = (input: unknown, defaultValue: string[]) => Array.isArray(input) ? input.filter((item): item is string => typeof item === 'string' && item.trim().length > 0) : defaultValue;
@@ -438,7 +482,6 @@ function _getRealisticFallbackWorlds(answers: AssessmentAnswers, profile?: Candi
       { year: 7, label: 'Yr 7', ctcLPA: Math.round(role.yr1 * 3.4 * 10) / 10, ctcLow: Math.round(role.yr1 * 2.8 * 10) / 10, ctcHigh: Math.round(role.yr1 * 4.2 * 10) / 10 },
       { year: 10, label: 'Yr 10', ctcLPA: role.yr10, ctcLow: Math.round(role.yr10 * 0.85 * 10) / 10, ctcHigh: Math.round(role.yr10 * 1.3 * 10) / 10 }
     ];
-
     const monthlyExp = estimateMonthlyExpenses('metro', 'moderate');
     const netWorthProjection = calculateNetWorthProjection({
       salaryTrajectory,
@@ -501,6 +544,7 @@ function buildPersonalizedSimulationPrompt(
   research: CareerResearchResult
 ): string {
   const candidateProfile = profile || getRealisticFallbackProfile(answers);
+  const stage = getStageCalibration(answers.currentStage);
   
   // Sort affinities by score to prioritize
   const sortedAffinities = [...candidateProfile.archetypeAffinities].sort((a, b) => b.score - a.score);
@@ -585,6 +629,7 @@ function getPersonalizedFallbackWorlds(
   research: CareerResearchResult
 ): CareerWorld[] {
   const candidateProfile = profile || getRealisticFallbackProfile(answers);
+  const stage = getStageCalibration(answers.currentStage);
   const isTech = /comp|code|dev|soft|tech|data|it|ai|ml/i.test(answers.fieldOfStudy || answers.keySkills?.join(' ') || '');
   const isBiz = /biz|market|fin|sales|manag|comm|oper/i.test(answers.fieldOfStudy || answers.keySkills?.join(' ') || '');
   
@@ -599,10 +644,11 @@ function getPersonalizedFallbackWorlds(
       { year: 7, label: 'Yr 7', ctcLPA: Math.round(role.yr1 * 3.4 * 10) / 10, ctcLow: Math.round(role.yr1 * 2.8 * 10) / 10, ctcHigh: Math.round(role.yr1 * 4.2 * 10) / 10 },
       { year: 10, label: 'Yr 10', ctcLPA: role.yr10, ctcLow: Math.round(role.yr10 * 0.85 * 10) / 10, ctcHigh: Math.round(role.yr10 * 1.3 * 10) / 10 }
     ];
+    const adjustedSalaryTrajectory = stageAdjustedSalaryTrajectory(salaryTrajectory, stage.salaryFactor);
 
     const monthlyExp = estimateMonthlyExpenses('metro', 'moderate');
     const netWorthProjection = calculateNetWorthProjection({
-      salaryTrajectory,
+      salaryTrajectory: adjustedSalaryTrajectory,
       savingsRatePercent: 30,
       annualInflationPercent: 6,
       investmentReturnPercent: 12,
@@ -614,7 +660,7 @@ function getPersonalizedFallbackWorlds(
     return {
       id: `world-${idx + 1}`,
       rank: idx + 1,
-      careerTitle: role.title,
+      careerTitle: polishCareerTitle(`${stage.titlePrefix}${role.title}`),
       archetype: role.archetype,
       field: role.field,
       tagline: role.tagline,
@@ -624,7 +670,7 @@ function getPersonalizedFallbackWorlds(
         `Aligns with your top value: ${candidateProfile.valuesRanked[0]?.label || 'growth'} and ${role.archetype} work style`,
         `Fits your ${answers.timeHorizon || 5}-year horizon, ${answers.locationFlexibility || 'metro'} preference, and ${candidateProfile.riskAppetite.split(' ')[0].toLowerCase()} risk profile`
       ],
-      salaryTrajectory,
+      salaryTrajectory: adjustedSalaryTrajectory,
       netWorthProjection,
       happinessMetrics: {
         overall: role.happiness,
@@ -637,12 +683,12 @@ function getPersonalizedFallbackWorlds(
       jobSecurityReasoning: role.security > 85 ? 'High baseline demand backed by national enterprise infrastructure.' : 'High market value driven by specialized execution skills.',
       demandTrend: role.trend,
       skillGap: role.skills,
-      timelineToComfortable: '2–3 years',
-      timelineToPeak: '7–10 years',
+      timelineToComfortable: stage.comfortableTimeline,
+      timelineToPeak: stage.peakTimeline,
       exampleCompanies: role.exampleCompanies,
       risks: role.risks,
       dayInTheLife: role.day,
-      methodology: 'Personalized heuristic engine calibrated against Indian labor market CTC liquidity, AmbitionBox benchmarks, and research insights.',
+      methodology: `Personalized heuristic engine calibrated for ${stage.label} against Indian labor market CTC liquidity, AmbitionBox benchmarks, and research insights.`,
       isUnconventional: role.isUnconventional
     };
   });
@@ -699,11 +745,19 @@ function buildDynamicRoles(
     : signals.technicalInterest >= 70
       ? 'Digital Infrastructure & Platform Specialist'
       : 'Institutional Research & Operations Specialist';
+  const schoolTitles = [
+    hasCreative || hasPeople ? 'Communication & Culture Explorer' : hasAnalytics ? 'Science & Discovery Explorer' : 'Foundations & Career Explorer',
+    hasPeople ? 'Community Projects & Leadership Explorer' : 'Subject-to-Strengths Project Builder',
+    hasCreative ? 'Storytelling & Experience Explorer' : 'Curiosity-Led Research Explorer',
+    'Student Portfolio & Freelance Experimenter',
+    'Public Service & Policy Explorer',
+  ];
+  const roleTitleSet = answers.currentStage === 'school' ? schoolTitles : [primaryTitle, isBiz ? 'Strategic Growth & Operations Lead' : productTitle, creativeTitle, independentTitle, institutionalTitle];
   
   const roles = [
     // Role 1: Primary affinity - deep specialization
     {
-      title: primaryTitle,
+      title: roleTitleSet[0],
       archetype: 'technical' as const,
       field: isTech ? 'Deep Technical Specialization' : 'Specialized Domain Leadership',
       tagline: `A ${hasCoding ? 'technical' : hasAnalytics ? 'evidence-led' : hasCreative ? 'human-centered' : 'domain'} track built around your ${profile.coreStrengths[0]} and current market demand.`,
@@ -729,7 +783,7 @@ function buildDynamicRoles(
     },
     // Role 2: Business/Strategy - cross-functional
     {
-      title: isBiz ? 'Strategic Growth & Operations Lead' : productTitle,
+      title: roleTitleSet[1],
       archetype: 'business' as const,
       field: isBiz ? 'Growth Strategy & Commercial Ops' : 'Product Leadership',
       tagline: `Translate ${profile.coreStrengths[0]} into measurable outcomes across ${answers.environment || 'hybrid'} teams.`,
@@ -759,7 +813,7 @@ function buildDynamicRoles(
     },
     // Role 3: Creative/Human-facing
     {
-      title: creativeTitle,
+      title: roleTitleSet[2],
       archetype: 'creative' as const,
       field: 'Product Design & User Experience',
       tagline: `Shape clearer experiences where ${profile.coreStrengths[0]} meets the way people actually work and decide.`,
@@ -789,7 +843,7 @@ function buildDynamicRoles(
     },
     // Role 4: Entrepreneurial/Independent
     {
-      title: independentTitle,
+      title: roleTitleSet[3],
       archetype: 'entrepreneurial' as const,
       field: 'Independent Knowledge Economy',
       tagline: `A high-autonomy path for building an independent practice around ${profile.coreStrengths[0]} and your ${riskLevel} risk posture.`,
@@ -819,7 +873,7 @@ function buildDynamicRoles(
     },
     // Role 5: Structured/Stability - unconventional/hidden gem
     {
-      title: institutionalTitle,
+      title: roleTitleSet[4],
       archetype: 'structured' as const,
       field: 'Institutional & Strategic Advisory',
       tagline: `A measured path combining ${answers.locationFlexibility || 'location flexibility'} with durable institutional impact.`,
@@ -895,12 +949,14 @@ function personalizeGeneratedWorlds(
   research: CareerResearchResult
 ): CareerWorld[] {
   const signals = profile.signalScores || calculateProfileSignals(answers);
+  const stage = getStageCalibration(answers.currentStage);
   const firstGrowthArea = (research.highGrowthAreas[0] || 'Applied Career Systems').replace(/\b(engineering|engineer|specialist|lead)\b/gi, '').replace(/\s+/g, ' ').trim();
   const skillText = `${answers.fieldOfStudy} ${(answers.keySkills || []).join(' ')}`.toLowerCase();
   const hasCoding = /coding|technology|computer|software|engineering|programming/.test(skillText);
+  const hasAnalytics = /analytical|logical|math|quantitative|research|data/.test(skillText);
   const hasCreative = /creative|design|writing|language/.test(skillText) || signals.creativity >= 72;
   const hasPeople = /people|communication|persuasion|leadership|business/.test(skillText) || signals.communication >= 72;
-  const roleTitles = [
+  const defaultRoleTitles = [
     hasCoding
       ? `${firstGrowthArea} Engineer`
       : hasCreative
@@ -913,19 +969,32 @@ function personalizeGeneratedWorlds(
     answers.riskTolerance === 'high-risk' && signals.autonomy >= 75 ? 'Independent Automation & Advisory Builder' : hasCreative ? 'Independent Brand & Experience Consultant' : 'Independent Domain Consultant',
     answers.riskTolerance === 'stable' && signals.communication >= 70 ? 'Public Programs & Digital Transformation Advisor' : signals.technicalInterest >= 70 ? 'Digital Infrastructure & Platform Specialist' : 'Institutional Research & Operations Specialist',
   ];
+  const roleTitles = answers.currentStage === 'school'
+    ? [
+        hasCreative || hasPeople ? 'Communication & Culture Explorer' : hasAnalytics ? 'Science & Discovery Explorer' : 'Foundations & Career Explorer',
+        hasPeople ? 'Community Projects & Leadership Explorer' : 'Subject-to-Strengths Project Builder',
+        hasCreative ? 'Storytelling & Experience Explorer' : 'Curiosity-Led Research Explorer',
+        'Student Portfolio & Freelance Experimenter',
+        'Public Service & Policy Explorer',
+      ]
+    : defaultRoleTitles;
 
   return worlds.map((world, index) => {
     const profileFit = index === 0 ? signals.problemSolving : index === 1 ? signals.businessInterest : index === 2 ? signals.creativity : index === 3 ? signals.autonomy : 100 - signals.riskTolerance;
     const fitScore = Math.round((world.fitScore * 0.55) + (profileFit * 0.45));
     return {
       ...world,
-      careerTitle: roleTitles[index] || world.careerTitle,
+      careerTitle: polishCareerTitle(`${stage.titlePrefix}${roleTitles[index] || world.careerTitle}`),
       fitScore: Math.max(0, Math.min(100, fitScore)),
       fitReasons: [
         `Profile signal: ${index === 0 ? 'problem solving' : index === 1 ? 'business interest' : index === 2 ? 'creative thinking' : index === 3 ? 'autonomy' : 'risk calibration'} scored ${profileFit}/100.`,
+        `Calibrated for ${stage.label}: ${answers.fieldOfStudy || 'your current background'} with a ${answers.timeHorizon || 5}-year investment horizon.`,
         ...world.fitReasons.filter(reason => !reason.toLowerCase().includes('generic')).slice(0, 2),
       ],
-      methodology: `${world.methodology} Role lane and fit score were recalibrated against this user's assessment signal vector and current market research.`,
+      salaryTrajectory: stageAdjustedSalaryTrajectory(world.salaryTrajectory, stage.salaryFactor),
+      timelineToComfortable: stage.comfortableTimeline,
+      timelineToPeak: stage.peakTimeline,
+      methodology: `${world.methodology} Role lane, stage (${stage.label}), and fit score were recalibrated against this user's assessment signal vector and current market research.`,
     };
   });
 }
@@ -956,7 +1025,7 @@ export async function runSimulation(
           { year: 1, label: 'Yr 1', ctcLPA: 8 },
           { year: 10, label: 'Yr 10', ctcLPA: 35 }
         ];
-        const netWorthProjection = world.netWorthProjection || calculateNetWorthProjection({
+        const netWorthProjection = calculateNetWorthProjection({
           salaryTrajectory,
           savingsRatePercent: 30,
           annualInflationPercent: 6,

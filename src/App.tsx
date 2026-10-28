@@ -134,7 +134,7 @@ export default function App() {
   return (
     <div className="min-h-screen bg-white font-sans text-slate-900 relative">
       {/* Floating About link */}
-      <div className="absolute top-4 right-4 z-50">
+      <div className={`absolute right-4 z-50 ${currentScreen === 'landing' ? 'top-21 sm:right-8' : 'top-4'}`}>
         <button onClick={() => setCurrentScreen('history')} className="mr-4 text-sm font-medium text-slate-500 hover:text-teal-600 transition">My Journey</button>
         <button
           onClick={() => setCurrentScreen('about')}
