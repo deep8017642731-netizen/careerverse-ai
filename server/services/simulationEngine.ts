@@ -1,4 +1,4 @@
-import type { AssessmentAnswers, CandidateProfile, CareerWorld, CareerArchetype, MarketResearch } from '../../src/lib/types.js';
+import type { AssessmentAnswers, CandidateProfile, CareerWorld, CareerArchetype, MarketResearch, SalaryDataPoint, NetWorthDataPoint } from '../../src/lib/types.js';
 import { SYSTEM_PROMPT, buildProfileUnderstandingPrompt } from '../prompts/systemPrompt.js';
 import { callOpenRouter } from './openRouterClient.js';
 import { searchCurrentMarket } from './marketSearch.js';
@@ -323,7 +323,7 @@ export async function generateCandidateProfile(answers: AssessmentAnswers): Prom
   return getRealisticFallbackProfile(answers);
 }
 
-function _getRealisticFallbackWorlds(answers: AssessmentAnswers, profile?: CandidateProfile): CareerWorld[] {
+export function _getRealisticFallbackWorlds(answers: AssessmentAnswers, profile?: CandidateProfile): CareerWorld[] {
   const isTech = /comp|code|dev|soft|tech|data|it|ai|ml/i.test(answers.fieldOfStudy || answers.keySkills?.join(' ') || '');
   const isBusiness = /biz|market|fin|sales|manag|comm|oper/i.test(answers.fieldOfStudy || answers.keySkills?.join(' ') || '');
 
@@ -544,11 +544,9 @@ function buildPersonalizedSimulationPrompt(
   research: CareerResearchResult
 ): string {
   const candidateProfile = profile || getRealisticFallbackProfile(answers);
-  const stage = getStageCalibration(answers.currentStage);
   
   // Sort affinities by score to prioritize
   const sortedAffinities = [...candidateProfile.archetypeAffinities].sort((a, b) => b.score - a.score);
-  const _topAffinities = sortedAffinities.slice(0, 3).map(a => a.archetype);
   
   const profileContext = `
 VERIFIED CANDIDATE DNA:
@@ -702,13 +700,10 @@ function buildDynamicRoles(
   isBiz: boolean
 ) {
   const signals = calculateProfileSignals(answers);
-  const _topValue = profile.valuesRanked[0]?.value || 'growth';
   const riskLevel = answers.riskTolerance || 'moderate';
-  const _workStyle = answers.workStyle || 'collaborative';
   
   // Use research to customize roles
   const highGrowth = research.highGrowthAreas[0] || (isTech ? 'Applied AI Engineering' : 'Growth Product Management');
-  const _unconventional = research.unconventionalPaths[0] || 'Fractional Leadership Role';
   const risingSkills = research.skillDemandAnalysis.filter(s => s.trend === 'rising').slice(0, 3).map(s => s.skill);
   const salaryBench = research.salaryBenchmarks[0] || { entryLPA: 10, midLPA: 25, seniorLPA: 50 };
   const skillText = `${answers.fieldOfStudy} ${(answers.keySkills || []).join(' ')}`.toLowerCase();
@@ -916,12 +911,8 @@ function normalizeCareerWorlds(raw: unknown, fallback: CareerWorld[]): CareerWor
     const fitScore = typeof value.fitScore === 'number' && Number.isFinite(value.fitScore)
       ? Math.max(0, Math.min(100, Math.round(value.fitScore)))
       : base.fitScore;
-    const salaryTrajectory = Array.isArray(value.salaryTrajectory) && value.salaryTrajectory.length >= 2
-      ? value.salaryTrajectory
-      : base.salaryTrajectory;
-    const netWorthProjection = Array.isArray(value.netWorthProjection) && value.netWorthProjection.length >= 2
-      ? value.netWorthProjection
-      : base.netWorthProjection;
+    const salaryTrajectory = normalizeSalaryTrajectory(value.salaryTrajectory, base.salaryTrajectory);
+    const netWorthProjection = normalizeNetWorthProjection(value.netWorthProjection, base.netWorthProjection);
     return {
       ...base,
       ...value,
@@ -940,6 +931,58 @@ function normalizeCareerWorlds(raw: unknown, fallback: CareerWorld[]): CareerWor
   });
 
   return normalized.length >= 3 ? normalized : fallback;
+}
+
+function normalizeSalaryTrajectory(raw: unknown, fallback: SalaryDataPoint[]): SalaryDataPoint[] {
+  if (!Array.isArray(raw)) return fallback;
+
+  const normalized = raw.flatMap((point, index) => {
+    if (!point || typeof point !== 'object') return [];
+    const value = point as Record<string, unknown>;
+    const year = typeof value.year === 'number' && Number.isFinite(value.year) ? value.year : undefined;
+    const ctcLPA = typeof value.ctcLPA === 'number' && Number.isFinite(value.ctcLPA) ? value.ctcLPA : undefined;
+    if (year === undefined || ctcLPA === undefined || ctcLPA < 0) return [];
+
+    // Model output sometimes omits the range. Keep the existing fallback
+    // market spread rather than inventing a separate salary projection.
+    const ctcLow = typeof value.ctcLow === 'number' && Number.isFinite(value.ctcLow)
+      ? value.ctcLow
+      : Math.round(ctcLPA * 0.85 * 10) / 10;
+    const ctcHigh = typeof value.ctcHigh === 'number' && Number.isFinite(value.ctcHigh)
+      ? value.ctcHigh
+      : Math.round(ctcLPA * 1.2 * 10) / 10;
+
+    return [{
+      year,
+      label: typeof value.label === 'string' && value.label.trim() ? value.label : `Yr ${year || index + 1}`,
+      ctcLPA,
+      ctcLow: Math.min(ctcLow, ctcLPA),
+      ctcHigh: Math.max(ctcHigh, ctcLPA),
+    }];
+  });
+
+  return normalized.length >= 2 ? normalized : fallback;
+}
+
+function normalizeNetWorthProjection(raw: unknown, fallback: NetWorthDataPoint[]): NetWorthDataPoint[] {
+  if (!Array.isArray(raw)) return fallback;
+
+  const normalized = raw.flatMap(point => {
+    if (!point || typeof point !== 'object') return [];
+    const value = point as Record<string, unknown>;
+    const numeric = (key: keyof NetWorthDataPoint) =>
+      typeof value[key] === 'number' && Number.isFinite(value[key]) ? value[key] as number : undefined;
+    const year = numeric('year');
+    const netWorthLakhs = numeric('netWorthLakhs');
+    const savingsLakhs = numeric('savingsLakhs');
+    const investmentsLakhs = numeric('investmentsLakhs');
+    if (year === undefined || netWorthLakhs === undefined || savingsLakhs === undefined || investmentsLakhs === undefined) {
+      return [];
+    }
+    return [{ year, netWorthLakhs, savingsLakhs, investmentsLakhs }];
+  });
+
+  return normalized.length >= 2 ? normalized : fallback;
 }
 
 function personalizeGeneratedWorlds(
@@ -1021,18 +1064,21 @@ export async function runSimulation(
       const personalizedWorlds = personalizeGeneratedWorlds(normalizeCareerWorlds(parsed, fallbackWorlds), answers, candidateProfile, research);
       const normalizedWorlds = personalizedWorlds.map((world, index) => {
         const monthlyExp = estimateMonthlyExpenses('metro', 'moderate');
-        const salaryTrajectory = world.salaryTrajectory || [
-          { year: 1, label: 'Yr 1', ctcLPA: 8 },
-          { year: 10, label: 'Yr 10', ctcLPA: 35 }
-        ];
-        const netWorthProjection = calculateNetWorthProjection({
-          salaryTrajectory,
-          savingsRatePercent: 30,
-          annualInflationPercent: 6,
-          investmentReturnPercent: 12,
-          monthlyExpensesLakhs: monthlyExp,
-          yearsToProject: 10
-        });
+        const salaryTrajectory = normalizeSalaryTrajectory(world.salaryTrajectory, [
+          { year: 1, label: 'Yr 1', ctcLPA: 8, ctcLow: 6.8, ctcHigh: 9.6 },
+          { year: 10, label: 'Yr 10', ctcLPA: 35, ctcLow: 29.8, ctcHigh: 45.5 }
+        ]);
+        const netWorthProjection = normalizeNetWorthProjection(
+          world.netWorthProjection,
+          calculateNetWorthProjection({
+            salaryTrajectory,
+            savingsRatePercent: 30,
+            annualInflationPercent: 6,
+            investmentReturnPercent: 12,
+            monthlyExpensesLakhs: monthlyExp,
+            yearsToProject: 10
+          })
+        );
 
         return {
           ...world,

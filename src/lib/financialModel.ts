@@ -3,7 +3,7 @@
 // ============================================================
 // This runs REAL MATH for net worth projections — never LLM-generated.
 
-import type { SalaryDataPoint, NetWorthDataPoint } from './types';
+import type { SalaryDataPoint, NetWorthDataPoint } from './types.js';
 
 interface FinancialParams {
   salaryTrajectory: SalaryDataPoint[];

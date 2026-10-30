@@ -1,4 +1,5 @@
-import { Router, Request, Response } from 'express';
+import { Router } from 'express';
+import type { Request, Response } from 'express';
 import { generateCandidateProfile, runSimulation, researchCareerPaths } from '../services/simulationEngine.js';
 import { generateRoadmap } from '../services/roadmapEngine.js';
 import { createAdaptiveScenario, evaluateAdaptiveDecision } from '../services/adaptiveSimulationEngine.js';
